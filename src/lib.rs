@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use regex::Regex;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
