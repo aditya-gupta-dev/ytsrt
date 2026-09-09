@@ -2,6 +2,8 @@
 name = "ytsrt"
 version = "0.1.0"
 edition = "2024"
+keywords = ["youtube", "transcript", "captions", "async", "tokio"]
+categories = ["multimedia", "api-bindings"]
 
 [dependencies]
 bytes = "1"
