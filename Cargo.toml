@@ -2,6 +2,8 @@
 name = "ytsrt"
 version = "0.1.0"
 edition = "2024"
+description = "An asynchronous Rust library for extracting transcripts and captions from YouTube videos." 
+license = "MIT"
 keywords = ["youtube", "transcript", "captions", "async", "tokio"]
 categories = ["multimedia", "api-bindings"]
 
