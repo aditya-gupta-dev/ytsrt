@@ -1,10 +1,13 @@
+use quick_xml::de::from_str;
 use regex::Regex;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use quick_xml::de::from_str;
+use serde_json::{Value, json};
 use std::error::Error;
 use std::fmt;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +45,7 @@ pub enum TranscriptError {
     TranscriptsUnavailable,
     MissingBaseUrl,
     InvalidNumber(std::num::ParseFloatError),
+    Io(std::io::Error),
 }
 
 impl fmt::Display for TranscriptError {
@@ -61,6 +65,7 @@ impl fmt::Display for TranscriptError {
             }
             Self::MissingBaseUrl => write!(f, "baseUrl not found in caption track"),
             Self::InvalidNumber(err) => write!(f, "{err}"),
+            Self::Io(err) => write!(f, "io error: {err}"),
         }
     }
 }
@@ -88,6 +93,12 @@ impl From<quick_xml::DeError> for TranscriptError {
 impl From<std::num::ParseFloatError> for TranscriptError {
     fn from(err: std::num::ParseFloatError) -> Self {
         Self::InvalidNumber(err)
+    }
+}
+
+impl From<std::io::Error> for TranscriptError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err)
     }
 }
 
@@ -146,8 +157,8 @@ pub async fn get_transcript(video_url: &str) -> Result<Vec<Snippet>, TranscriptE
 
     let html = response.text().await?;
 
-    let api_key_regex = Regex::new(r#""INNERTUBE_API_KEY":\s*"([a-zA-Z0-9_-]+)""#)
-        .expect("valid regex");
+    let api_key_regex =
+        Regex::new(r#""INNERTUBE_API_KEY":\s*"([a-zA-Z0-9_-]+)""#).expect("valid regex");
 
     let api_key = api_key_regex
         .captures(&html)
@@ -165,9 +176,7 @@ pub async fn get_transcript(video_url: &str) -> Result<Vec<Snippet>, TranscriptE
         "videoId": video_id
     });
 
-    let api_url = format!(
-        "https://www.youtube.com/youtubei/v1/player?key={api_key}"
-    );
+    let api_url = format!("https://www.youtube.com/youtubei/v1/player?key={api_key}");
 
     let response = client
         .post(api_url)
@@ -182,10 +191,7 @@ pub async fn get_transcript(video_url: &str) -> Result<Vec<Snippet>, TranscriptE
 
     let data: Value = response.json().await?;
 
-    if let Some(playability) = data
-        .get("playabilityStatus")
-        .and_then(Value::as_object)
-    {
+    if let Some(playability) = data.get("playabilityStatus").and_then(Value::as_object) {
         let status = playability
             .get("status")
             .and_then(Value::as_str)
@@ -250,4 +256,43 @@ pub async fn get_transcript(video_url: &str) -> Result<Vec<Snippet>, TranscriptE
             })
         })
         .collect()
+}
+
+pub trait ToSrt {
+    fn to_srt_file<P: AsRef<Path>>(self, path: P) -> Result<(), TranscriptError>;
+}
+
+fn format_timestamp(seconds: f64) -> String {
+    let mut millis = (seconds.fract() * 1000.0).round() as u64;
+    let mut total_secs = seconds.trunc() as u64;
+    if millis >= 1000 {
+        total_secs += millis / 1000;
+        millis %= 1000;
+    }
+    let s = total_secs % 60;
+    let m = (total_secs / 60) % 60;
+    let h = total_secs / 3600;
+    format!("{:02}:{:02}:{:02},{:03}", h, m, s, millis)
+}
+
+impl ToSrt for Result<Vec<Snippet>, TranscriptError> {
+    fn to_srt_file<P: AsRef<Path>>(self, path: P) -> Result<(), TranscriptError> {
+        let snippets = self?;
+        snippets.to_srt_file(path)
+    }
+}
+
+impl ToSrt for Vec<Snippet> {
+    fn to_srt_file<P: AsRef<Path>>(self, path: P) -> Result<(), TranscriptError> {
+        let mut file = File::create(path)?;
+        for (i, snippet) in self.iter().enumerate() {
+            let start = format_timestamp(snippet.start);
+            let end = format_timestamp(snippet.start + snippet.duration);
+            writeln!(file, "{}", i + 1)?;
+            writeln!(file, "{} --> {}", start, end)?;
+            writeln!(file, "{}", snippet.text)?;
+            writeln!(file)?;
+        }
+        Ok(())
+    }
 }

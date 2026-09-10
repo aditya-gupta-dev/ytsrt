@@ -69,6 +69,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Exporting to SRT
+
+You can easily save the downloaded transcript to an `.srt` file using the `ToSrt` trait:
+
+```rust
+use ytsrt::{get_transcript, ToSrt};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    get_transcript("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        .await
+        .to_srt_file("captions.srt")?;
+
+    println!("Saved to captions.srt");
+    Ok(())
+}
+```
+
 ## Transcript Data
 
 Each transcript entry is returned as a `Snippet`:
