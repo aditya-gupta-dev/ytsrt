@@ -6,6 +6,7 @@ description = "An asynchronous Rust library for extracting transcripts and capti
 license = "MIT"
 keywords = ["youtube", "transcript", "captions", "async", "tokio"]
 categories = ["multimedia", "api-bindings"]
+repository = "https://github.com/aditya-gupta-dev/ytsrt"
 
 [dependencies]
 bytes = "1"
