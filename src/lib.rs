@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::error::Error;
 use std::fmt;
-use std::fs::File;
-use std::io::Write;
 use std::path::Path;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -258,8 +258,9 @@ pub async fn get_transcript(video_url: &str) -> Result<Vec<Snippet>, TranscriptE
         .collect()
 }
 
+#[allow(async_fn_in_trait)]
 pub trait ToSrt {
-    fn to_srt_file<P: AsRef<Path>>(self, path: P) -> Result<(), TranscriptError>;
+    async fn to_srt_file<P: AsRef<Path> + Send>(self, path: P) -> Result<(), TranscriptError>;
 }
 
 fn format_timestamp(seconds: f64) -> String {
@@ -276,22 +277,20 @@ fn format_timestamp(seconds: f64) -> String {
 }
 
 impl ToSrt for Result<Vec<Snippet>, TranscriptError> {
-    fn to_srt_file<P: AsRef<Path>>(self, path: P) -> Result<(), TranscriptError> {
+    async fn to_srt_file<P: AsRef<Path> + Send>(self, path: P) -> Result<(), TranscriptError> {
         let snippets = self?;
-        snippets.to_srt_file(path)
+        snippets.to_srt_file(path).await
     }
 }
 
 impl ToSrt for Vec<Snippet> {
-    fn to_srt_file<P: AsRef<Path>>(self, path: P) -> Result<(), TranscriptError> {
-        let mut file = File::create(path)?;
+    async fn to_srt_file<P: AsRef<Path> + Send>(self, path: P) -> Result<(), TranscriptError> {
+        let mut file = File::create(path).await?;
         for (i, snippet) in self.iter().enumerate() {
             let start = format_timestamp(snippet.start);
             let end = format_timestamp(snippet.start + snippet.duration);
-            writeln!(file, "{}", i + 1)?;
-            writeln!(file, "{} --> {}", start, end)?;
-            writeln!(file, "{}", snippet.text)?;
-            writeln!(file)?;
+            let block = format!("{}\n{} --> {}\n{}\n\n", i + 1, start, end, snippet.text);
+            file.write_all(block.as_bytes()).await?;
         }
         Ok(())
     }

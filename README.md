@@ -80,7 +80,8 @@ use ytsrt::{get_transcript, ToSrt};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     get_transcript("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
         .await
-        .to_srt_file("captions.srt")?;
+        .to_srt_file("captions.srt")
+        .await?;
 
     println!("Saved to captions.srt");
     Ok(())
